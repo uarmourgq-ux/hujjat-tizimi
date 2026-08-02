@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ҳужжатни текшириш</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{--fs:1;}
+body{background:#e8edf4;font-size:calc(14px * var(--fs));color:#222;}
+.page{width:480px;max-width:100%;margin:15px auto;background:#fff;border:1px solid #bfcddb;border-radius:5px;overflow:hidden;padding-top:10px;}
+.header{background:linear-gradient(#22C55E,#15803D);padding:15px;color:#fff;margin:0 12px;border-radius:6px;}
+.header-top{display:flex;align-items:center;}
+.logo{width:104px;height:104px;border-radius:50%;background:#fff;color:#1E8A3C;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:calc(34px * var(--fs));flex-shrink:0;margin-right:16px;}
+.logo-img{width:104px;height:104px;}
+.head-text h1{font-size:calc(17px * var(--fs));line-height:1.4;max-width:320px;}
+.white-line{height:2px;background:rgba(255,255,255,.6);margin-top:10px;width:96%;}
+.big-title{background:linear-gradient(#22C55E,#15803D);padding:14px;text-align:center;font-size:calc(17px * var(--fs));font-weight:bold;color:#fff;margin:8px 12px 0;border-radius:6px;}
+.info{padding:8px 12px 0;}
+.row{display:flex;gap:8px;margin-bottom:5px;}
+.left{flex:1;background:linear-gradient(#1A4FC4,#003ea8);color:#fff;font-size:calc(14px * var(--fs-label));padding:9px 12px;display:flex;align-items:center;justify-content:flex-end;text-align:right;border-radius:4px;}
+.right{flex:1;background:#fff;border:2px solid #4d89ef;padding:9px 12px;font-size:calc(14px * var(--fs-value));font-weight:600;color:#0b56c5;border-radius:4px;display:flex;align-items:center;}
+.lane-Сариқ{color:#C08A1F !important;} .lane-Қизил{color:#C0392B !important;} .lane-Кўк{color:#0b56c5 !important;} .lane-Яшил{color:#1E8A3C !important;}
+.goods-outer{padding:4px 12px 0;}
+.goods{overflow-x:auto;overflow-y:visible;border:1px solid #dbe6f4;border-radius:4px;}
+.goods table{width:100%;min-width:600px;border-collapse:collapse;}
+.goods th{background:#edf5ff;border:1px solid #b8cceb;padding:8px 4px;font-size:calc(13px * var(--fs));color:#003f9f;}
+.goods th.narrow{width:48px;white-space:normal;line-height:1.2;}
+.goods th.num-col{width:28px;white-space:nowrap;}
+.goods th.code-col{width:60px;white-space:normal;line-height:1.25;}
+.goods th.name-col{width:180px;}
+.goods td{border:1px solid #dbe6f4;padding:8px;vertical-align:middle;font-size:calc(13px * var(--fs));color:#0b56c5;font-weight:600;}
+.desc-ta{width:100%;min-height:26px;border:1px solid #dbe6f4;border-radius:3px;font-size:calc(13px * var(--fs));color:#0b56c5;font-weight:600;padding:4px 6px;background:#fff;resize:vertical;box-sizing:border-box;font-family:inherit;overflow-y:auto;}
+.summary{margin-top:8px;}
+.sumrow{display:flex;margin-bottom:6px;}
+.pdf{margin:2px 12px 12px;background:linear-gradient(#22C55E,#15803D);padding:8px;text-align:center;border-radius:6px;}
+.pdf a, .pdf span{color:#fff;text-decoration:none;font-size:calc(16px * var(--fs));font-weight:bold;display:inline-flex;align-items:center;justify-content:center;gap:10px;}
+.not-found{padding:70px 20px;text-align:center;color:#5B6472;}
+.not-found .big{font-size:20px;color:#222;font-weight:800;margin-bottom:6px;}
+
+@media (max-width:520px){
+  .header-top{flex-direction:row;align-items:center;text-align:left;}
+  .logo{width:48px;height:48px;font-size:calc(18px * var(--fs));margin-right:10px;margin-bottom:0;}
+  .logo-img{width:48px;height:48px;margin-right:10px;margin-bottom:0;}
+  .head-text h1{font-size:calc(13px * var(--fs));max-width:100%;text-align:left;line-height:1.35;}
+  .big-title{font-size:calc(13px * var(--fs));padding:11px;}
+  .left{font-size:calc(12px * var(--fs-label));padding:10px;}
+  .right{font-size:calc(12px * var(--fs-value));padding:10px;}
+  .goods th,.goods td{font-size:calc(11.5px * var(--fs));padding:7px;}
+}
+</style>
+</head>
+<body>
+<div id="app"><div class="page"><div class="not-found"><div class="big">Юкланмоқда…</div></div></div></div>
+<script>
+function esc(s){ return (s||'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function nl2br(s){ return esc(s).replace(/\n/g,'<br>'); }
+function cleanWeight(s){ return (s||'').toString().trim().replace(/\s*(кг|kg)\.?\s*$/i,''); }
+function fmt(dt){ if(!dt) return '—'; const d=new Date(dt); return isNaN(d) ? dt : d.toLocaleDateString('uz-UZ')+' '+d.toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'}); }
+
+async function render(){
+  const app = document.getElementById('app');
+  const id = new URLSearchParams(location.search).get('id');
+  if(!id){ app.innerHTML = `<div class="page"><div class="not-found"><div class="big">Ҳужжат рақами кўрсатилмаган</div></div></div>`; return; }
+
+  const [cfgRes, docRes] = await Promise.all([fetch('/api/config'), fetch('/api/docs/'+id)]);
+  const cfg = await cfgRes.json();
+
+  if(!docRes.ok){
+    app.innerHTML = `<div class="page"><div class="not-found"><div class="big">Ҳужжат топилмади</div><p>Кўрсатилган рақам бўйича маълумот мавжуд эмас.</p></div></div>`;
+    return;
+  }
+  const doc = await docRes.json();
+  const orgInitial = (cfg.name || 'К').trim().charAt(0).toUpperCase();
+  const logoHtml = cfg.logoFile
+    ? `<img src="/uploads/${encodeURIComponent(cfg.logoFile)}" class="logo-img" style="border-radius:50%;object-fit:cover;flex-shrink:0;margin-right:16px;background:#fff;">`
+    : `<div class="logo">${esc(orgInitial)}</div>`;
+  const laneClass = 'lane-' + (doc.lane || '');
+  const goods = doc.goods || [];
+  const fontFamily = cfg.fontFamily || 'Tahoma, Arial, sans-serif';
+  const fontScale = (Number(cfg.fontSize) || 14) / 14;
+  const labelScale = (Number(cfg.labelFontSize) || 14) / 14;
+  const valueScale = (Number(cfg.valueFontSize) || 14) / 14;
+
+  function item(name, value, cls){
+    return `<div class="row"><div class="left">${name}</div><div class="right ${cls||''}">${value}</div></div>`;
+  }
+
+  document.documentElement.style.setProperty('--fs', fontScale);
+  document.documentElement.style.setProperty('--fs-label', labelScale);
+  document.documentElement.style.setProperty('--fs-value', valueScale);
+  let fontStyleTag = document.getElementById('dynFontStyle');
+  if(!fontStyleTag){
+    fontStyleTag = document.createElement('style');
+    fontStyleTag.id = 'dynFontStyle';
+    document.head.appendChild(fontStyleTag);
+  }
+  fontStyleTag.textContent = `.page, .page *{ font-family: ${fontFamily} !important; }`;
+
+  app.innerHTML = `
+  <div class="page">
+    <div class="header">
+      <div class="header-top">
+        ${logoHtml}
+        <div class="head-text">
+          <h1>${cfg.name ? nl2br(cfg.name) : 'Корхона номи киритилмаган'}</h1>
+          <div class="white-line"></div>
+        </div>
+      </div>
+    </div>
+    <div class="big-title">${esc(cfg.subtitle) || 'ҲУЖЖАТНИ ТЕКШИРИШ'}</div>
+
+    <div class="info">
+      ${item('БЮДнинг рўйхат рақами:', esc(doc.regNum)||'—')}
+      ${item('БЮД рўйхатга олинган вақти:', fmt(doc.regTime))}
+      ${item('Расмийлаштирилган вақт:', fmt(doc.doneTime))}
+      ${item('Расмийлаштирув ҳолати:', esc(doc.status)||'—')}
+      ${item('БЮД йўлаги:', esc(doc.lane)||'—', laneClass)}
+      ${item('Божхона режими:', esc(doc.customsMode)||'—')}
+      ${item('Юк жўнатувчи давлат:', esc(doc.fromCountry)||'—')}
+      ${item('Юк келиб тушадиган давлат:', esc(doc.toCountry)||'—')}
+      ${item('Чегарадаги божхона пости:', esc(doc.post)||'—')}
+      ${item('Транспорт воситаси тури:', esc(doc.transport)||'—')}
+      ${item('Товар тўғрисидаги маълумотлар:', 'Товар сони: ' + goods.length + ' та')}
+    </div>
+
+    ${goods.length ? `
+    <div class="goods-outer">
+    <div class="goods">
+      <table>
+        <thead><tr>
+          <th class="num-col">№</th>
+          <th class="code-col">ТИФ ТН коди</th>
+          <th class="name-col">Товар номи</th>
+          <th class="narrow">Нетто оғирлиги</th>
+          <th class="narrow">Брутто оғирлиги</th>
+        </tr></thead>
+        <tbody>
+          ${goods.map((g,i)=>`<tr>
+            <td align="center">${i+1}</td>
+            <td align="center">${esc(g.code)}</td>
+            <td><textarea class="desc-ta" readonly>${esc(g.name)}</textarea></td>
+            <td align="center" style="white-space:nowrap;">${esc(cleanWeight(g.netto))} кг</td>
+            <td align="center" style="white-space:nowrap;">${esc(cleanWeight(g.brutto))} кг</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    </div>` : ''}
+
+    <div class="summary" style="padding:0 12px 2px;">
+      <div class="sumrow row" style="margin-top:8px;">
+        <div class="left">Товарнинг умумий нетто оғирлиги:</div>
+        <div class="right"><strong>${esc(cleanWeight(doc.nettoTotal))||'—'}</strong>&nbsp;кг</div>
+      </div>
+      <div class="sumrow row">
+        <div class="left">Товарнинг умумий брутто оғирлиги:</div>
+        <div class="right"><strong>${esc(cleanWeight(doc.bruttoTotal))||'—'}</strong>&nbsp;кг</div>
+      </div>
+    </div>
+
+    <div class="pdf">
+      ${doc.pdfFile
+        ? `<a href="/uploads/${encodeURIComponent(doc.pdfFile)}" download="${esc(doc.pdfName||'hujjat.pdf')}">
+            <svg width="30" height="30" viewBox="0 0 24 24" style="flex-shrink:0;">
+              <path fill="#fff" d="M6 1.5h8.5L19 6v15a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 21V3A1.5 1.5 0 0 1 6 1.5z"/>
+              <path fill="#cfd8dc" d="M14.5 1.5V6H19z"/>
+              <rect x="3.2" y="13.2" width="13.6" height="7" rx="1.2" fill="#E53935"/>
+              <text x="10" y="18.7" font-size="6.4" font-family="Arial,Helvetica,sans-serif" font-weight="bold" fill="#fff" text-anchor="middle">PDF</text>
+            </svg>
+            Электрон БЮДни юклаб олиш
+          </a>`
+        : `<span>PDF файл мавжуд эмас</span>`}
+    </div>
+  </div>`;
+}
+render();
+</script>
+</body>
+</html>
