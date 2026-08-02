@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Бошқарув панели — Ҳужжат тизими</title>
+<style>
+  :root{ --blue-lbl:#1A56C4; --paper:#F2F4F7; --line:#D7DCE3; --ink:#1A1A1A; --muted:#6B7280; --navy:#12213E; --green:#1E8A3C; }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,'Segoe UI',Arial,sans-serif;background:var(--paper);color:var(--ink);}
+  .shell{max-width:1100px;margin:0 auto;padding:22px 16px 60px;}
+  h1{font-size:19px;margin:0 0 2px;color:var(--navy);}
+  .sub{font-size:12.5px;color:var(--muted);margin:0 0 20px;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:18px;}
+  .card h2{font-size:15px;margin:0 0 12px;color:var(--navy);}
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:5px;font-weight:600;}
+  .field input, .field select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:7px;font-size:13.5px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+  @media (max-width:700px){.row2,.row3{grid-template-columns:1fr;}}
+  .btn{border:none;border-radius:8px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;}
+  .btn-primary{background:var(--navy);color:#fff;}
+  .btn-green{background:var(--green);color:#fff;}
+  .btn-ghost{background:#fff;border:1px solid var(--line);color:var(--navy);}
+  .btn-sm{padding:6px 10px;font-size:11.5px;}
+  table.goods{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:12.5px;}
+  table.goods th{background:#E3F2E7;padding:7px;text-align:left;border:1px solid var(--line);font-size:11px;text-transform:uppercase;color:var(--muted);}
+  table.goods td{padding:6px;border:1px solid var(--line);}
+  table.goods td input{width:100%;border:1px solid var(--line);border-radius:5px;padding:5px 7px;font-size:12.5px;}
+  .doc-row{display:flex;gap:12px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px;flex-wrap:wrap;}
+  .doc-row img.qr{width:56px;height:56px;border:1px solid var(--line);border-radius:6px;flex-shrink:0;}
+  .doc-meta{flex:1;min-width:180px;}
+  .doc-meta .id{font-family:monospace;font-size:12px;font-weight:700;color:var(--navy);}
+  .doc-meta .sub2{font-size:11.5px;color:var(--muted);}
+  .doc-actions{display:flex;gap:6px;}
+  .hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.5;}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;z-index:60;}
+  .empty{padding:24px;text-align:center;color:var(--muted);font-size:13px;}
+  .warn{background:#FFF7E6;border:1px solid #F0C674;color:#7A5A0A;padding:10px 12px;border-radius:8px;font-size:12.5px;margin-bottom:16px;}
+  .status-line{font-size:11.5px;color:var(--muted);margin-top:4px;}
+</style>
+</head>
+<body>
+<div class="shell" id="app"></div>
+<script>
+const CUSTOMS_MODES = ['ИМ 40','ЭК 10','ИМ 51','ЭК 21','Бошқа'];
+const LANE_OPTS = ['Сариқ','Қизил','Кўк','Яшил'];
+const STATUS_OPTS = ['Расмийлаштирилган','Жараёнда','Рад этилган'];
+
+function esc(s){ return (s||'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function showToast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2600); }
+
+let goodsRows = [{code:'',name:'',netto:'',brutto:''}];
+let editingId = null;
+
+function goodsRowHtml(row, idx){
+  return `<tr data-idx="${idx}">
+    <td style="width:26px;text-align:center;">${idx+1}</td>
+    <td style="width:100px;"><input class="g-code" value="${esc(row.code)}" placeholder="8430490001"></td>
+    <td><input class="g-name" value="${esc(row.name)}" placeholder="Товар номи"></td>
+    <td style="width:90px;"><input class="g-netto" value="${esc(row.netto)}" placeholder="кг"></td>
+    <td style="width:90px;"><input class="g-brutto" value="${esc(row.brutto)}" placeholder="кг"></td>
+    <td style="width:34px;"><button type="button" class="btn btn-ghost btn-sm g-del">✕</button></td>
+  </tr>`;
+}
+function renderGoodsTable(){
+  const wrap = document.getElementById('goodsTableWrap');
+  wrap.innerHTML = `<div style="overflow-x:auto;"><table class="goods"><thead><tr><th>№</th><th>ТИФ ТН коди</th><th>Товар номи</th><th>Нетто оғ.</th><th>Брутто оғ.</th><th></th></tr></thead>
+    <tbody id="goodsBody">${goodsRows.map(goodsRowHtml).join('')}</tbody></table></div>
+    <button type="button" class="btn btn-ghost btn-sm" id="addGoodsRow">+ Товар қўшиш</button>`;
+  document.getElementById('addGoodsRow').addEventListener('click', ()=>{ goodsRows.push({code:'',name:'',netto:'',brutto:''}); renderGoodsTable(); });
+  wrap.querySelectorAll('.g-del').forEach(b=>b.addEventListener('click',(e)=>{
+    const idx=+e.target.closest('tr').dataset.idx; syncGoodsFromInputs(); goodsRows.splice(idx,1); renderGoodsTable();
+  }));
+  wrap.querySelectorAll('.g-code,.g-name,.g-netto,.g-brutto').forEach(inp=>inp.addEventListener('input', syncGoodsFromInputs));
+}
+function syncGoodsFromInputs(){
+  document.querySelectorAll('#goodsBody tr').forEach((tr,i)=>{
+    goodsRows[i] = { code: tr.querySelector('.g-code').value, name: tr.querySelector('.g-name').value, netto: tr.querySelector('.g-netto').value, brutto: tr.querySelector('.g-brutto').value };
+  });
+}
+
+async function loadConfig(){ const r = await fetch('/api/config'); return r.json(); }
+async function saveConfig(cfg){ const r = await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)}); return r.json(); }
+async function loadDocs(){ const r = await fetch('/api/docs'); return r.json(); }
+async function deleteDocApi(id){ return fetch('/api/docs/'+id, {method:'DELETE'}); }
+
+function qrUrl(text){ return '/api/qrcode?size=140&text=' + encodeURIComponent(text); }
+
+async function renderApp(){
+  const app = document.getElementById('app');
+  const cfg = await loadConfig();
+  app.innerHTML = `
+    <h1>Ҳужжат тизими — Бошқарув панели</h1>
+    <div class="sub">Бу саҳифа фақат сизга кўринади. Маълумотлар ва PDF файллар шу компьютерда сақланади.</div>
+
+    <div class="warn" id="urlWarn" style="display:${cfg.publicUrl ? 'none' : 'block'};">
+      <b>Диққат:</b> QR код бошқа телефондан ишлаши учун, компьютерингизни интернетга очиб (масалан Cloudflare Tunnel орқали), унинг ташқи манзилини қуйида "Ташқи (жамоат) манзил" майдонига киритинг. Қадамлар учун чатдаги йўриқномага қаранг.
+    </div>
+
+    <div class="card">
+      <h2>Созламалар</h2>
+      <div class="row3">
+        <div class="field"><label>Корхона номи (Enter билан қатор алмаштиришингиз мумкин)</label><textarea id="cfgName" rows="2" style="resize:vertical;font-family:inherit;" placeholder="Масалан: «Азия Трейд» МЧЖ">${esc(cfg.name)}</textarea></div>
+        <div class="field"><label>Қўшимча сарлавҳа</label><input id="cfgSub" value="${esc(cfg.subtitle)}" placeholder="БОЖХОНА ЮК ДЕКЛАРАЦИЯСИ"></div>
+        <div class="field"><label>Ташқи (жамоат) манзил</label><input id="cfgUrl" value="${esc(cfg.publicUrl)}" placeholder="https://xxxx.trycloudflare.com"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Ёзув шрифти</label>
+          <select id="cfgFont">
+            <option value="Tahoma, Arial, sans-serif" ${cfg.fontFamily==='Tahoma, Arial, sans-serif'||!cfg.fontFamily?'selected':''}>Tahoma</option>
+            <option value="Arial, sans-serif" ${cfg.fontFamily==='Arial, sans-serif'?'selected':''}>Arial</option>
+            <option value="'Segoe UI', sans-serif" ${cfg.fontFamily==="'Segoe UI', sans-serif"?'selected':''}>Segoe UI</option>
+            <option value="Georgia, 'Times New Roman', serif" ${cfg.fontFamily==="Georgia, 'Times New Roman', serif"?'selected':''}>Georgia (serif)</option>
+            <option value="'Times New Roman', serif" ${cfg.fontFamily==="'Times New Roman', serif"?'selected':''}>Times New Roman</option>
+            <option value="Verdana, sans-serif" ${cfg.fontFamily==='Verdana, sans-serif'?'selected':''}>Verdana</option>
+            <option value="'PT Sans', Arial, sans-serif" ${cfg.fontFamily==="'PT Sans', Arial, sans-serif"?'selected':''}>PT Sans</option>
+          </select>
+        </div>
+        <div class="field"><label>Шрифт ўлчами (px)</label>
+          <input id="cfgFontSize" type="number" min="1" max="101" step="1" value="${cfg.fontSize || 14}" placeholder="14">
+        </div>
+        <div class="field"><label>Кўк матн ўлчами (px)</label>
+          <input id="cfgLabelFontSize" type="number" min="1" max="101" step="1" value="${cfg.labelFontSize || 14}" placeholder="14">
+        </div>
+        <div class="field"><label>Оқ матн ўлчами (px)</label>
+          <input id="cfgValueFontSize" type="number" min="1" max="101" step="1" value="${cfg.valueFontSize || 14}" placeholder="14">
+        </div>
+      </div>
+      <div class="field" style="max-width:320px;">
+        <label>Корхона логотипи</label>
+        <input id="cfgLogo" type="file" accept="image/*">
+        <div class="status-line" id="logoStatus">${cfg.logoFile ? 'Жорий логотип: '+esc(cfg.logoFile) : 'Логотип юкланмаган — ўрнига корхона номининг бош ҳарфи кўринади'}</div>
+        ${cfg.logoFile ? `<img src="/uploads/${encodeURIComponent(cfg.logoFile)}" style="max-width:70px;max-height:70px;margin-top:8px;border:1px solid var(--line);border-radius:50%;">` : ''}
+      </div>
+      <button class="btn btn-primary" id="saveCfg">Созламани сақлаш</button>
+    </div>
+
+    <div class="card">
+      <h2 id="formTitle">Янги ҳужжат яратиш</h2>
+      <form id="docForm">
+        <input type="hidden" id="f_id">
+        <div class="row2">
+          <div class="field"><label>Расмийлаштирув ҳолати</label><select id="f_status">${STATUS_OPTS.map(s=>`<option>${s}</option>`).join('')}</select></div>
+          <div class="field"><label>БЮД йўлаги</label><select id="f_lane">${LANE_OPTS.map(l=>`<option>${l}</option>`).join('')}</select></div>
+        </div>
+        <div class="field"><label>БЮДнинг рўйхат рақами</label><input id="f_regnum" placeholder="12008/26.12.2025/0001247"></div>
+        <div class="row2">
+          <div class="field"><label>БЮД рўйхатга олинган вақти</label><input id="f_regtime" type="datetime-local"></div>
+          <div class="field"><label>Расмийлаштирилган вақт</label><input id="f_donetime" type="datetime-local"></div>
+        </div>
+        <div class="row3">
+          <div class="field"><label>Божхона режими</label><input id="f_customs" list="modeList" placeholder="ИМ 40"><datalist id="modeList">${CUSTOMS_MODES.map(m=>`<option value="${m}">`).join('')}</datalist></div>
+          <div class="field"><label>Юк жўнатувчи давлат</label><input id="f_from" placeholder="643 - РОССИЯ"></div>
+          <div class="field"><label>Юк келиб тушадиган давлат</label><input id="f_to" placeholder="860 - ЎЗБЕКИСТОН"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Чегарадаги божхона пости</label><input id="f_post" placeholder="27001 - «Яллама» ЧП"></div>
+          <div class="field"><label>Транспорт воситаси тури</label><input id="f_transport" placeholder="30 - Автомобиль транспорти"></div>
+        </div>
+        <div class="field"><label>Товарлар рўйхати</label></div>
+        <div id="goodsTableWrap"></div>
+        <div class="row2" style="margin-top:8px;">
+          <div class="field"><label>Товарнинг умумий нетто оғирлиги (кг)</label><input id="f_netto_total" placeholder="18 400,000"></div>
+          <div class="field"><label>Товарнинг умумий брутто оғирлиги (кг)</label><input id="f_brutto_total" placeholder="18 500,000"></div>
+        </div>
+        <div class="field"><label>Электрон ҳужжат (PDF)</label><input id="f_pdf" type="file" accept="application/pdf">
+          <div class="status-line" id="currentPdfLine"></div>
+        </div>
+        <button type="submit" class="btn btn-green" id="submitBtn">Ҳужжат ва QR-код яратиш</button>
+        <button type="button" class="btn btn-ghost" id="cancelEdit" style="display:none;">Бекор қилиш</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Яратилган ҳужжатлар</h2>
+      <div id="docListWrap"><div class="empty">Юкланмоқда…</div></div>
+    </div>
+  `;
+
+  goodsRows = [{code:'',name:'',netto:'',brutto:''}];
+  renderGoodsTable();
+
+  document.getElementById('saveCfg').addEventListener('click', async ()=>{
+    const newCfg = {
+      name: document.getElementById('cfgName').value,
+      subtitle: document.getElementById('cfgSub').value,
+      publicUrl: (()=>{ let u = document.getElementById('cfgUrl').value.trim(); if(!u) return ''; if(!/^https?:\/\//i.test(u)) u = 'https://' + u; try{ const parsed = new URL(u); return parsed.origin; }catch(e){ return u.replace(/\/$/,''); } })(),
+      fontFamily: document.getElementById('cfgFont').value,
+      fontSize: document.getElementById('cfgFontSize').value,
+      labelFontSize: document.getElementById('cfgLabelFontSize').value,
+      valueFontSize: document.getElementById('cfgValueFontSize').value
+    };
+    await saveConfig(newCfg);
+    const logoFile = document.getElementById('cfgLogo').files[0];
+    if(logoFile){
+      const fd = new FormData();
+      fd.append('logo', logoFile);
+      await fetch('/api/config/logo', {method:'POST', body:fd});
+    }
+    showToast('Созламалар сақланди');
+    document.getElementById('urlWarn').style.display = newCfg.publicUrl ? 'none' : 'block';
+    loadDocList();
+    renderApp();
+  });
+
+  document.getElementById('cancelEdit').addEventListener('click', resetForm);
+
+  document.getElementById('docForm').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    syncGoodsFromInputs();
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true; btn.textContent = 'Сақланмоқда…';
+
+    const fields = {
+      status: document.getElementById('f_status').value,
+      regNum: document.getElementById('f_regnum').value,
+      lane: document.getElementById('f_lane').value,
+      regTime: document.getElementById('f_regtime').value,
+      doneTime: document.getElementById('f_donetime').value,
+      customsMode: document.getElementById('f_customs').value,
+      fromCountry: document.getElementById('f_from').value,
+      toCountry: document.getElementById('f_to').value,
+      post: document.getElementById('f_post').value,
+      transport: document.getElementById('f_transport').value,
+      goods: goodsRows.filter(g=>g.name||g.code),
+      nettoTotal: document.getElementById('f_netto_total').value,
+      bruttoTotal: document.getElementById('f_brutto_total').value
+    };
+
+    const fd = new FormData();
+    fd.append('data', JSON.stringify(fields));
+    const pdfFile = document.getElementById('f_pdf').files[0];
+    if(pdfFile) fd.append('pdf', pdfFile);
+
+    try{
+      let resp;
+      if(editingId){
+        resp = await fetch('/api/docs/'+editingId, {method:'PUT', body:fd});
+      } else {
+        resp = await fetch('/api/docs', {method:'POST', body:fd});
+      }
+      if(!resp.ok) throw new Error('server_error');
+      const saved = await resp.json();
+      showToast(editingId ? 'Ҳужжат янгиланди: '+saved.id : 'Ҳужжат сақланди: '+saved.id);
+      resetForm();
+      loadDocList();
+    }catch(err){ showToast('Хатолик юз берди, сервер ишлаётганини текширинг'); }
+    btn.disabled=false;
+  });
+
+  loadDocList();
+}
+
+function resetForm(){
+  editingId = null;
+  document.getElementById('docForm').reset();
+  document.getElementById('formTitle').textContent = 'Янги ҳужжат яратиш';
+  document.getElementById('submitBtn').textContent = 'Ҳужжат ва QR-код яратиш';
+  document.getElementById('cancelEdit').style.display = 'none';
+  document.getElementById('currentPdfLine').textContent = '';
+  goodsRows = [{code:'',name:'',netto:'',brutto:''}];
+  renderGoodsTable();
+}
+
+async function editDoc(doc){
+  editingId = doc.id;
+  document.getElementById('formTitle').textContent = 'Ҳужжатни таҳрирлаш — ' + doc.id;
+  document.getElementById('submitBtn').textContent = 'Ўзгаришларни сақлаш';
+  document.getElementById('cancelEdit').style.display = 'inline-block';
+  document.getElementById('f_status').value = doc.status || '';
+  document.getElementById('f_regnum').value = doc.regNum || '';
+  document.getElementById('f_lane').value = doc.lane || '';
+  document.getElementById('f_regtime').value = doc.regTime || '';
+  document.getElementById('f_donetime').value = doc.doneTime || '';
+  document.getElementById('f_customs').value = doc.customsMode || '';
+  document.getElementById('f_from').value = doc.fromCountry || '';
+  document.getElementById('f_to').value = doc.toCountry || '';
+  document.getElementById('f_post').value = doc.post || '';
+  document.getElementById('f_transport').value = doc.transport || '';
+  document.getElementById('f_netto_total').value = doc.nettoTotal || '';
+  document.getElementById('f_brutto_total').value = doc.bruttoTotal || '';
+  document.getElementById('currentPdfLine').textContent = doc.pdfName ? ('Жорий файл: ' + doc.pdfName + ' (янги файл танласангиз, алмаштирилади)') : 'Файл бириктирилмаган';
+  goodsRows = (doc.goods && doc.goods.length) ? doc.goods.map(g=>({...g})) : [{code:'',name:'',netto:'',brutto:''}];
+  renderGoodsTable();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+async function loadDocList(){
+  const wrap = document.getElementById('docListWrap');
+  const cfg = await loadConfig();
+  const docs = await loadDocs();
+  if(!docs.length){ wrap.innerHTML = '<div class="empty">Ҳали ҳужжат яратилмаган.</div>'; return; }
+  const base = cfg.publicUrl || location.origin;
+  wrap.innerHTML = '';
+  docs.forEach(doc=>{
+    const viewUrl = base + '/view.html?id=' + doc.id;
+    const row = document.createElement('div');
+    row.className = 'doc-row';
+    row.innerHTML = `
+      <img class="qr" src="${qrUrl(viewUrl)}" alt="QR">
+      <div class="doc-meta">
+        <div class="id">${doc.id}</div>
+        <div class="sub2">${esc(doc.regNum)||'—'} · ${esc(doc.status)} · ${new Date(doc.createdAt).toLocaleDateString()}</div>
+      </div>
+      <div class="doc-actions">
+        <a href="${viewUrl}" target="_blank" class="btn btn-ghost btn-sm">Кўриш</a>
+        <button class="btn btn-ghost btn-sm" data-edit="${doc.id}">Таҳрирлаш</button>
+        <button class="btn btn-ghost btn-sm" data-del="${doc.id}">Ўчириш</button>
+      </div>`;
+    wrap.appendChild(row);
+  });
+  wrap.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click', async ()=>{
+    if(confirm('Ушбу ҳужжатни ўчиришни тасдиқлайсизми?')){ await deleteDocApi(b.dataset.del); loadDocList(); }
+  }));
+  wrap.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click', async ()=>{
+    const r = await fetch('/api/docs/'+b.dataset.edit); const doc = await r.json(); editDoc(doc);
+  }));
+}
+
+renderApp();
+</script>
+</body>
+</html>
